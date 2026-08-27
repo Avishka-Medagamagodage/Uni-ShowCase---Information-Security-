@@ -10,13 +10,14 @@ class AuthService {
     if (!email) {
       throw new Error('Email is required to send an invitation');
     }
-    const token = generateInviteToken(role, email);
+    const normalizedEmail = email.toLowerCase().trim();
+    const token = generateInviteToken(role, normalizedEmail);
     const inviteLink = `${frontendUrl}/register?inviteToken=${token}`;
 
     // Create the Invitation record in the DB
     const Invitation = require('../models/Invitation');
     const invitation = await Invitation.create({
-      email,
+      email: normalizedEmail,
       role,
       token,
       status: 'Pending'
@@ -26,7 +27,7 @@ class AuthService {
     const { sendInvitationEmail } = require('../utils/mailer');
     let emailResult = {};
     try {
-      emailResult = await sendInvitationEmail(email, role, inviteLink);
+      emailResult = await sendInvitationEmail(normalizedEmail, role, inviteLink);
     } catch (err) {
       console.error('Failed to send nodemailer email, but invitation logged in DB:', err);
     }
@@ -35,7 +36,7 @@ class AuthService {
       token, 
       inviteLink, 
       role, 
-      email, 
+      email: normalizedEmail, 
       invitation,
       previewUrl: emailResult.previewUrl 
     };
@@ -49,13 +50,18 @@ class AuthService {
   }
 
   async processUserRegistration({ googleId, name, email, profilePicture, inviteToken, mockRole }) {
-    let user = await User.findOne({ email });
+    if (!email) {
+      throw new Error('Email is required for registration/authentication');
+    }
+    const normalizedEmail = email.toLowerCase().trim();
+
+    let user = await User.findOne({ email: normalizedEmail });
     if (user) {
       // If inviteToken is passed but user already exists, they are trying to register with a used account
       if (inviteToken) {
         throw new Error('This Google account is already registered. Please log in or use a different Google account to register.');
       }
-      if (mockRole) {
+      if (mockRole && process.env.NODE_ENV === 'development') {
         user.role = mockRole;
       }
       user.googleId = googleId || user.googleId;
@@ -68,10 +74,34 @@ class AuthService {
     let role = 'Student';
     if (inviteToken) {
       const decodedInvite = this.validateInvite(inviteToken);
-      role = decodedInvite.role || 'Student';
+
+      // Strict Security Check 1: Ensure invite token email strictly matches Google authenticated email
+      if (decodedInvite.email && decodedInvite.email.toLowerCase().trim() !== normalizedEmail) {
+        throw new Error(`Invitation mismatch: This invite token was issued for "${decodedInvite.email}", but you authenticated with "${normalizedEmail}". Please sign in with the invited email address.`);
+      }
+
+      // Strict Security Check 2: Atomically verify that the invitation exists, is Pending for this email, and mark Completed
       const Invitation = require('../models/Invitation');
-      await Invitation.findOneAndUpdate({ token: inviteToken }, { status: 'Completed' });
-    } else if (mockRole) {
+      const invitationRecord = await Invitation.findOneAndUpdate(
+        { 
+          token: inviteToken, 
+          status: 'Pending',
+          email: normalizedEmail
+        },
+        { 
+          $set: { status: 'Completed' } 
+        },
+        { 
+          new: true 
+        }
+      );
+
+      if (!invitationRecord) {
+        throw new Error('Invitation token is invalid, expired, or has already been used.');
+      }
+
+      role = invitationRecord.role || decodedInvite.role || 'Student';
+    } else if (mockRole && process.env.NODE_ENV === 'development') {
       role = mockRole;
     } else {
       throw new Error('Account not found. You must be invited by an Administrator to register.');
@@ -80,7 +110,7 @@ class AuthService {
     user = await User.create({
       googleId,
       name,
-      email,
+      email: normalizedEmail,
       profilePicture,
       role,
       isVerified: true
