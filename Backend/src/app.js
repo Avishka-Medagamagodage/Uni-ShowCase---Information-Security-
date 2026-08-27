@@ -52,6 +52,9 @@ app.use(cors({
 }));
 
 // ── Socket.io ────────────────────────────────────────────────────────────────
+const jwt = require('jsonwebtoken');
+const { getJwtSecret } = require('./utils/inviteGenerator');
+
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
@@ -67,18 +70,32 @@ const io = new Server(server, {
 
 initSocketManager(io);
 
-io.on('connection', (socket) => {
-  const socketManager = require('./socket/socketManager');
+// Socket.io Authentication Middleware
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token || 
+    (socket.handshake.headers?.authorization && socket.handshake.headers.authorization.startsWith('Bearer ') 
+      ? socket.handshake.headers.authorization.split(' ')[1] 
+      : null);
 
-  // Client emits 'register' with their userId right after connecting
-  socket.on('register', (userId) => {
-    if (userId) {
-      registerSocket(userId, socket.id);
-      // Store userId on socket for fast disconnect lookup
-      socket.userId = userId.toString();
-      console.log(`[Socket] User ${userId} registered → socket ${socket.id}`);
-    }
-  });
+  if (!token) {
+    return next(new Error('Authentication error: Missing token'));
+  }
+
+  try {
+    const decoded = jwt.verify(token, getJwtSecret());
+    socket.userId = (decoded.id || decoded._id).toString();
+    socket.userRole = decoded.role;
+    next();
+  } catch (err) {
+    return next(new Error('Authentication error: Invalid or expired token'));
+  }
+});
+
+io.on('connection', (socket) => {
+  if (socket.userId) {
+    registerSocket(socket.userId, socket.id);
+    console.log(`[Socket] Authenticated User ${socket.userId} (${socket.userRole}) connected → socket ${socket.id}`);
+  }
 
   socket.on('disconnect', () => {
     if (socket.userId) {

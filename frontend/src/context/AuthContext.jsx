@@ -21,12 +21,14 @@ export const AuthProvider = ({ children }) => {
   // Connect / disconnect socket when auth state changes
   useEffect(() => {
     if (token && user) {
-      const s = io(BACKEND_URL, { transports: ['websocket', 'polling'] });
+      const s = io(BACKEND_URL, { 
+        transports: ['websocket', 'polling'],
+        auth: { token }
+      });
 
       s.on('connect', () => {
         const userId = user._id || user.id;
-        s.emit('register', userId);
-        console.log('[Socket] Connected and registered as', userId);
+        console.log('[Socket] Connected securely as', userId);
       });
 
       s.on('connect_error', (err) => {

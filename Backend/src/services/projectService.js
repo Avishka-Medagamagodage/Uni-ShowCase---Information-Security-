@@ -23,6 +23,11 @@ class ProjectService {
     let technologiesUsed = projectData.technologiesUsed;
     if (typeof technologiesUsed === 'string') technologiesUsed = technologiesUsed.split(',').map(tech => tech.trim());
 
+    // Security Fix: Students cannot self-publish. Only Admins can set initial isPublic status.
+    const isPublic = user && user.role === 'Admin'
+      ? (projectData.isPublic === 'true' || projectData.isPublic === true)
+      : false;
+
     const project = await Project.create({
       studentId,
       title: projectData.title,
@@ -32,7 +37,7 @@ class ProjectService {
       additionalImages: additionalImages.length > 0 ? additionalImages : (projectData.additionalImages || []),
       demoUrl: projectData.demoUrl || '',
       gitRepoUrl: projectData.gitRepoUrl || '',
-      isPublic: projectData.isPublic === 'true' || projectData.isPublic === true
+      isPublic
     });
 
     await project.populate('studentId', 'name email role');
@@ -121,6 +126,8 @@ class ProjectService {
     if (user.role === 'Student') {
       const isOwner = project.studentId._id.toString() === (user._id || user.id).toString();
       if (!project.isPublic && !isOwner) throw new Error('Access denied: Private project');
+    } else if (user.role === 'Recruiter') {
+      if (!project.isPublic) throw new Error('Access denied: Private project');
     }
     return project;
   }
@@ -174,7 +181,11 @@ class ProjectService {
     project.additionalImages = additionalImages;
     project.demoUrl = updateData.demoUrl !== undefined ? updateData.demoUrl : project.demoUrl;
     project.gitRepoUrl = updateData.gitRepoUrl !== undefined ? updateData.gitRepoUrl : project.gitRepoUrl;
-    project.isPublic = updateData.isPublic !== undefined ? (updateData.isPublic === 'true' || updateData.isPublic === true) : project.isPublic;
+    
+    // Security Fix: Only Admin or Recruiter can change isPublic status directly
+    if (updateData.isPublic !== undefined && (user.role === 'Admin' || user.role === 'Recruiter')) {
+      project.isPublic = (updateData.isPublic === 'true' || updateData.isPublic === true);
+    }
 
     await project.save();
     return project;
