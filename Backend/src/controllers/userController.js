@@ -1,15 +1,17 @@
 const User = require('../models/User');
 const Project = require('../models/Project');
+const { escapeRegex } = require('../utils/sanitize');
 
 const getAllUsers = async (req, res) => {
   try {
     const { search, role, isVerified, page, limit, followedOnly } = req.query;
     const query = {};
 
-    if (search) {
+    if (typeof search === 'string' && search.trim() !== '') {
+      const sanitizedSearch = escapeRegex(search.trim());
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
+        { name: { $regex: sanitizedSearch, $options: 'i' } },
+        { email: { $regex: sanitizedSearch, $options: 'i' } }
       ];
     }
 

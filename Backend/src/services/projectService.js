@@ -1,6 +1,7 @@
 const Project = require('../models/Project');
 const eventEmitter = require('../events/emitters');
 const { uploadBufferToCloudinary } = require('../utils/cloudinary');
+const { escapeRegex } = require('../utils/sanitize');
 
 class ProjectService {
   async createProject(studentId, projectData, files, user) {
@@ -60,16 +61,28 @@ class ProjectService {
       query.isPublic = true;
     }
 
-    if (search) {
+    if (typeof search === 'string' && search.trim() !== '') {
+      const sanitizedSearch = escapeRegex(search.trim());
       query.$and = query.$and || [];
       query.$and.push({
-        $or: [{ title: { $regex: search, $options: 'i' } }, { description: { $regex: search, $options: 'i' } }]
+        $or: [
+          { title: { $regex: sanitizedSearch, $options: 'i' } },
+          { description: { $regex: sanitizedSearch, $options: 'i' } }
+        ]
       });
     }
 
     if (technologies) {
-      const techArray = Array.isArray(technologies) ? technologies : technologies.split(',').map(t => t.trim());
-      query.technologiesUsed = { $in: techArray.map(t => new RegExp(t, 'i')) };
+      let techArray = [];
+      if (Array.isArray(technologies)) {
+        techArray = technologies.filter(t => typeof t === 'string').map(t => t.trim());
+      } else if (typeof technologies === 'string') {
+        techArray = technologies.split(',').map(t => t.trim()).filter(Boolean);
+      }
+      if (techArray.length > 0) {
+        const sanitizedTechs = techArray.map(t => new RegExp(`^${escapeRegex(t)}$`, 'i'));
+        query.technologiesUsed = { $in: sanitizedTechs };
+      }
     }
 
     // Followed only filter (for Recruiters)
