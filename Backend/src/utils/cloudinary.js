@@ -14,6 +14,15 @@ if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && proce
 }
 
 /**
+ * Sanitizes a filename for Cloudinary public_id and local paths.
+ */
+const sanitizeFilename = (filename) => {
+  if (!filename || typeof filename !== 'string') return 'file';
+  const base = path.parse(filename).name;
+  return base.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 50);
+};
+
+/**
  * Uploads a file Buffer directly to Cloudinary (for serverless / memoryStorage).
  *
  * @param {Buffer} buffer - File buffer from multer memoryStorage
@@ -23,14 +32,20 @@ if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && proce
  */
 const uploadBufferToCloudinary = (buffer, folder = 'unishowcase', originalname = 'file') => {
   return new Promise((resolve, reject) => {
+    const safeName = sanitizeFilename(originalname);
     if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
       // No Cloudinary config — return a placeholder path (local dev fallback)
-      return resolve(`/uploads/${Date.now()}-${originalname}`);
+      return resolve(`/uploads/${Date.now()}-${safeName}`);
     }
 
-    const publicId = `${folder}/${Date.now()}-${path.parse(originalname).name}`;
+    const publicId = `${folder}/${Date.now()}-${safeName}`;
     const uploadStream = cloudinary.uploader.upload_stream(
-      { folder, public_id: publicId, resource_type: 'auto', overwrite: true },
+      { 
+        folder, 
+        public_id: publicId, 
+        resource_type: 'image', // Security: strictly enforce image type
+        overwrite: true 
+      },
       (error, result) => {
         if (error) return reject(error);
         resolve(result.secure_url);
@@ -57,16 +72,18 @@ const uploadToCloudinary = async (filePath, folder = 'unishowcase') => {
       throw new Error(`File not found at path: ${filePath}`);
     }
 
+    const filename = path.basename(filePath);
+    const safeName = sanitizeFilename(filename);
+
     // Fallback if Cloudinary is not configured
     if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-      const filename = path.basename(filePath);
-      return `/uploads/${filename}`;
+      return `/uploads/${safeName}`;
     }
 
-    // Upload file to Cloudinary
+    // Upload file to Cloudinary with strict image resource_type
     const response = await cloudinary.uploader.upload(filePath, {
       folder: folder,
-      resource_type: 'auto'
+      resource_type: 'image' // Security: strictly enforce image type
     });
 
     // Delete local file after upload

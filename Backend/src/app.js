@@ -1,6 +1,8 @@
 const http = require('http');
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 require('dotenv').config();
 
@@ -21,23 +23,28 @@ const server = http.createServer(app);
 connectDB();
 initEventListeners();
 
+// ── Security Headers (Helmet) ────────────────────────────────────────────────
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: false
+}));
+
 // ── CORS ─────────────────────────────────────────────────────────────────────
-let frontendUrl = process.env.FRONTEND_URL || '';
-if (frontendUrl.endsWith('/')) {
-  frontendUrl = frontendUrl.slice(0, -1);
-}
+const configuredOrigins = (process.env.FRONTEND_URL || '')
+  .split(',')
+  .map(url => url.trim().replace(/\/$/, ''))
+  .filter(Boolean);
 
 const allowedOrigins = [
-  frontendUrl,
+  ...configuredOrigins,
   'http://localhost:5173',
-  'http://localhost:3000'
-].filter(Boolean);
+  'http://localhost:3000',
+  'http://127.0.0.1:5173'
+];
 
 const isOriginAllowed = (origin) => {
   if (!origin) return true;
   if (allowedOrigins.includes(origin)) return true;
-  // Dynamically allow Vercel previews and deployment domains
-  if (origin.endsWith('.vercel.app')) return true;
   return false;
 };
 
@@ -50,6 +57,26 @@ app.use(cors({
   },
   credentials: true
 }));
+
+// ── Rate Limiting ────────────────────────────────────────────────────────────
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many requests from this IP, please try again after 15 minutes' }
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many authentication attempts, please try again after 15 minutes' }
+});
+
+app.use('/api', generalLimiter);
+app.use('/api/auth', authLimiter);
 
 // ── Socket.io ────────────────────────────────────────────────────────────────
 const jwt = require('jsonwebtoken');
@@ -128,8 +155,17 @@ app.use('/api/users', userRoutes);
 
 // ── Error handler ─────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
+  if (err.name === 'CastError') {
+    return res.status(400).json({ message: `Invalid resource identifier format: ${err.value}` });
+  }
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({ message: err.message });
+  }
+  if (err.message && err.message.includes('CORS')) {
+    return res.status(403).json({ message: err.message });
+  }
   console.error('Unhandled Server Error:', err.stack);
-  res.status(500).json({ message: err.message || 'Internal Server Error' });
+  res.status(err.status || 500).json({ message: err.message || 'Internal Server Error' });
 });
 
 // ── Start server ──────────────────────────────────────────────────────────────
