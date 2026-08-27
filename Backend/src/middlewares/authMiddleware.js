@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { getJwtSecret } = require('../utils/inviteGenerator');
 
 const protect = async (req, res, next) => {
   let token;
@@ -7,7 +8,7 @@ const protect = async (req, res, next) => {
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     try {
       token = req.headers.authorization.split(' ')[1];
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'super_secret_jwt_key_net_centric_2026');
+      const decoded = jwt.verify(token, getJwtSecret());
       req.user = await User.findById(decoded.id).select('-__v');
       if (!req.user) return res.status(401).json({ message: 'User non-existent or deleted' });
       return next();
