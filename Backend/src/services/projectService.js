@@ -1,7 +1,7 @@
 const Project = require('../models/Project');
 const eventEmitter = require('../events/emitters');
 const { uploadBufferToCloudinary } = require('../utils/cloudinary');
-const { escapeRegex } = require('../utils/sanitize');
+const { escapeRegex, isValidHttpUrl, sanitizeUrl } = require('../utils/sanitize');
 
 class ProjectService {
   async createProject(studentId, projectData, files, user) {
@@ -24,6 +24,14 @@ class ProjectService {
     let technologiesUsed = projectData.technologiesUsed;
     if (typeof technologiesUsed === 'string') technologiesUsed = technologiesUsed.split(',').map(tech => tech.trim());
 
+    // Security Fix: Validate URL schemes against Stored XSS
+    if (projectData.demoUrl && !isValidHttpUrl(projectData.demoUrl)) {
+      throw new Error('Invalid demoUrl: Only valid http:// and https:// URLs are allowed');
+    }
+    if (projectData.gitRepoUrl && !isValidHttpUrl(projectData.gitRepoUrl)) {
+      throw new Error('Invalid gitRepoUrl: Only valid http:// and https:// URLs are allowed');
+    }
+
     // Security Fix: Students cannot self-publish. Only Admins can set initial isPublic status.
     const isPublic = user && user.role === 'Admin'
       ? (projectData.isPublic === 'true' || projectData.isPublic === true)
@@ -36,8 +44,8 @@ class ProjectService {
       technologiesUsed: technologiesUsed || [],
       coverImage: coverImage || projectData.coverImage || '',
       additionalImages: additionalImages.length > 0 ? additionalImages : (projectData.additionalImages || []),
-      demoUrl: projectData.demoUrl || '',
-      gitRepoUrl: projectData.gitRepoUrl || '',
+      demoUrl: sanitizeUrl(projectData.demoUrl),
+      gitRepoUrl: sanitizeUrl(projectData.gitRepoUrl),
       isPublic
     });
 
@@ -192,8 +200,21 @@ class ProjectService {
     project.technologiesUsed = technologiesUsed !== undefined ? technologiesUsed : project.technologiesUsed;
     project.coverImage = coverImage;
     project.additionalImages = additionalImages;
-    project.demoUrl = updateData.demoUrl !== undefined ? updateData.demoUrl : project.demoUrl;
-    project.gitRepoUrl = updateData.gitRepoUrl !== undefined ? updateData.gitRepoUrl : project.gitRepoUrl;
+    
+    // Security Fix: Validate URL schemes against Stored XSS
+    if (updateData.demoUrl !== undefined) {
+      if (updateData.demoUrl && !isValidHttpUrl(updateData.demoUrl)) {
+        throw new Error('Invalid demoUrl: Only valid http:// and https:// URLs are allowed');
+      }
+      project.demoUrl = sanitizeUrl(updateData.demoUrl);
+    }
+
+    if (updateData.gitRepoUrl !== undefined) {
+      if (updateData.gitRepoUrl && !isValidHttpUrl(updateData.gitRepoUrl)) {
+        throw new Error('Invalid gitRepoUrl: Only valid http:// and https:// URLs are allowed');
+      }
+      project.gitRepoUrl = sanitizeUrl(updateData.gitRepoUrl);
+    }
     
     // Security Fix: Only Admin or Recruiter can change isPublic status directly
     if (updateData.isPublic !== undefined && (user.role === 'Admin' || user.role === 'Recruiter')) {

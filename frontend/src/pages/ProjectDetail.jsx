@@ -61,6 +61,15 @@ const techColors = [
   'bg-sky-500/10 text-sky-400 border-sky-500/30',
 ];
 
+const getSafeUrl = (url) => {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  return null;
+};
+
 /* ─────────────────────────── component ─────────────────────────── */
 const ProjectDetail = () => {
   const { id } = useParams();
@@ -495,7 +504,7 @@ const ProjectDetail = () => {
             )}
 
             {/* Links */}
-            {(project.demoUrl || project.gitRepoUrl) && (
+            {(getSafeUrl(project.demoUrl) || getSafeUrl(project.gitRepoUrl)) && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -504,9 +513,9 @@ const ProjectDetail = () => {
               >
                 <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-4">Links</h2>
                 <div className="flex flex-wrap gap-3">
-                  {project.demoUrl && (
+                  {getSafeUrl(project.demoUrl) && (
                     <a
-                      href={project.demoUrl}
+                      href={getSafeUrl(project.demoUrl)}
                       target="_blank"
                       rel="noopener noreferrer"
                       id="demo-link"
@@ -516,9 +525,9 @@ const ProjectDetail = () => {
                       Live Demo
                     </a>
                   )}
-                  {project.gitRepoUrl && (
+                  {getSafeUrl(project.gitRepoUrl) && (
                     <a
-                      href={project.gitRepoUrl}
+                      href={getSafeUrl(project.gitRepoUrl)}
                       target="_blank"
                       rel="noopener noreferrer"
                       id="git-link"

@@ -10,9 +10,18 @@ const defaultGradients = [
   "from-indigo-500/20 to-blue-500/20",
 ];
 
+const getSafeUrl = (url) => {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  return null;
+};
+
 const getFullImageUrl = (url) => {
   if (!url) return '';
-  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image/')) {
     return url;
   }
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
@@ -115,9 +124,9 @@ const ProjectCard = ({
           <h3 className={`text-xl font-bold text-white ${hoverTextClass} transition-colors line-clamp-1 pr-4`}>
             {project.title}
           </h3>
-          {(project.demoUrl || project.demoLink) && (
+          {getSafeUrl(project.demoUrl || project.demoLink) && (
             <a
-              href={project.demoUrl || project.demoLink}
+              href={getSafeUrl(project.demoUrl || project.demoLink)}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
@@ -158,10 +167,10 @@ const ProjectCard = ({
               />
               <span className="text-sm font-medium text-zinc-300">{studentName}</span>
             </div>
-          ) : (
+          ) : getSafeUrl(project.demoUrl || project.demoLink) ? (
             // Owner view demo link
             <a
-              href={project.demoUrl || project.demoLink || '#'}
+              href={getSafeUrl(project.demoUrl || project.demoLink)}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
@@ -169,7 +178,7 @@ const ProjectCard = ({
             >
               <ExternalLink size={14} /> View Demo
             </a>
-          )}
+          ) : null}
 
           {/* Right Footer Action */}
           {isOwner && (

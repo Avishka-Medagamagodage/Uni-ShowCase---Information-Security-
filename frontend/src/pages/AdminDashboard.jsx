@@ -7,6 +7,15 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
 
+const getSafeUrl = (url) => {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  return null;
+};
+
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('projects');
   const [projects, setProjects] = useState([]);
@@ -459,8 +468,8 @@ const AdminDashboard = () => {
                             >
                               <Check className="w-4 h-4" /> Publish / Make Public
                             </Button>
-                            {project.demoUrl && (
-                              <a href={project.demoUrl} target="_blank" rel="noopener noreferrer">
+                            {getSafeUrl(project.demoUrl) && (
+                              <a href={getSafeUrl(project.demoUrl)} target="_blank" rel="noopener noreferrer">
                                 <Button 
                                   variant="secondary"
                                   className="px-6 py-2.5 text-sm rounded-xl!"
