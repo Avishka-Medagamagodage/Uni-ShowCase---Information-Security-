@@ -15,9 +15,9 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const User = require('./src/models/User');
 
-// ── Admin credentials – change these before running ──────────────────────────
-const ADMIN_NAME  = 'Dinith';
-const ADMIN_EMAIL = 'dinithchamo@gmail.com';
+// ── Admin credentials – configured via .env or fallback ───────────────────────
+const ADMIN_NAME  = process.env.INITIAL_ADMIN_NAME || 'System Administrator';
+const ADMIN_EMAIL = process.env.INITIAL_ADMIN_EMAIL || 'admin@university.edu';
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function seedAdmin() {
@@ -25,38 +25,35 @@ async function seedAdmin() {
     // 1. Connect to MongoDB
     const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/net_centric_app';
     await mongoose.connect(uri);
-    console.log('✅  MongoDB connected');
+    console.log('✅ MongoDB connected');
 
     // 2. Check for existing admin
     const existing = await User.findOne({ email: ADMIN_EMAIL });
     if (existing) {
-      console.log(`ℹ️   Admin already exists: ${existing.email} (role: ${existing.role})`);
+      console.log(`ℹ️ Admin already exists: ${existing.email} (role: ${existing.role})`);
       return;
     }
 
     // 3. Create admin user
-    //    - isVerified is set to true so the account is usable immediately.
-    //    - No password field is stored; the admin should log in via Google OAuth
-    //      or you can add a password hash here if you add a password field later.
     const admin = await User.create({
-      name:       ADMIN_NAME,
-      email:      ADMIN_EMAIL,
-      role:       'Admin',
+      name: ADMIN_NAME,
+      email: ADMIN_EMAIL,
+      role: 'Admin',
       isVerified: true,
       profilePicture: '',
     });
 
-    console.log('🎉  Admin user created successfully!');
-    console.log(`    Name  : ${admin.name}`);
-    console.log(`    Email : ${admin.email}`);
-    console.log(`    Role  : ${admin.role}`);
-    console.log(`    ID    : ${admin._id}`);
+    console.log('🎉 Admin user created successfully!');
+    console.log(`   Name  : ${admin.name}`);
+    console.log(`   Email : ${admin.email}`);
+    console.log(`   Role  : ${admin.role}`);
+    console.log(`   ID    : ${admin._id}`);
 
   } catch (err) {
-    console.error('❌  Error seeding admin:', err.message);
+    console.error('❌ Error seeding admin:', err.message);
   } finally {
     await mongoose.disconnect();
-    console.log('🔌  MongoDB disconnected. Done.');
+    console.log('🔌 MongoDB disconnected. Done.');
     process.exit(0);
   }
 }
